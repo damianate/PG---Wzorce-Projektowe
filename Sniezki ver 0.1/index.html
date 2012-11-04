@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+		<title>Gierowisko</title>
+		<script src="http://localhost:8000/socket.io/socket.io.js"></script>
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js"></script>
+	
+		 <style type="text/css">
+	 	canvas{
+	 	 
+ 
+background-color:rgb(0,0,0);
+background-image:url(tlo.jpg);
+background-position:top left;
+background-repeat:repeat;
+background-attachment:fixed;
+
+ 
+	 	}
+		 </style> 
+	</head>
+	
+	<body> 
+		
+			<script type="text/javascript">
+
+/***********************************************
+* Wylaczenie Entera w input texcie
+***********************************************/
+function handleEnter (field, event) {
+		var keyCode = event.keyCode ? event.keyCode : event.which ? event.which : event.charCode;
+		if (keyCode == 13) {
+			wyslij();
+			return false;
+		} 
+		else
+		return true;
+	}      
+/***********************************************
+	* Polaczenie + Czat
+ ***********************************************/
+  var socket = io.connect('http://localhost:8000');
+  
+  var input;  
+  var username=null;
+
+  socket.on('chat',function(data){
+  document.forms['Chat'].elements['tresc'].value += data.x +"\n";
+  });
+
+  function wyslij()
+{
+	textareaelem = document.getElementById('tresc');
+	textareaelem.scrollTop = textareaelem.scrollHeight;
+	if(this.username==null){
+  		  	this.username = document.forms['Chat'].elements['wpis'].value;
+  		  	 
+  		  	document.forms['Chat'].elements['tresc'].value+='\nTwoj nick to:' + this.username +'\n';
+  		  	document.forms['Chat'].elements['wpis'].value='';
+
+  		  }
+  		  else{
+  		var napis = this.username +': ' + document.forms['Chat'].elements['wpis'].value ; 
+  		document.forms['Chat'].elements['tresc'].value+= 'napisales: '+document.forms['Chat'].elements['wpis'].value + '\n';
+		socket.emit('chat', { x:napis}); 
+		document.forms['Chat'].elements['wpis'].value='';
+			 }
+	
+}
+</script> 
+
+		<form name="Chat"  >
+	   <textarea id="tresc" name="tresc" style="position:fixed;left:80%;width: 180px; height: 50%;top:40%;">Login = pierwszy wpis</textarea> 
+	   <input type="button" style="position:fixed;left:80%;top:95%;" onclick="wyslij()" value="wyslij" 
+	    />
+	   <input type="text" style="position:fixed;left:85%;top:95%;" onkeypress="return handleEnter(this, event)" name="wpis" value='' ></input>
+		</form>
+
+
+
+
+
+
+
+<canvas id="pole" width="640" height="480"></canvas>
+ 
+
+<script src="Lokalny.js"></script>
+<script type="text/javascript">
+/***********************************************
+	* tresc gry
+ ***********************************************/
+
+
+var canvas,
+	ctx,
+	keys,
+	lokalnyGracz,
+	pozostaliGracze;
+var kierunek = null;
+var vel=5;
+function init(){
+	canvas = document.getElementById("pole");
+	ctx = canvas.getContext("2d"); 
+	var startX = Math.round(Math.random()*(canvas.width-5)),
+		startY = Math.round(Math.random()*(canvas.height-5));
+
+	lokalnyGracz = new Lokalny(startX,startY);
+
+	pozostaliGracze=[];
+	 
+	loop();
+	PrzypnijEventy();
+}; 
+function PrzypnijEventy(){
+socket.on("connect", onSocketConnected);
+socket.on("new player",onNewPlayer);
+socket.on("remove player",onRemovePlayer);
+socket.on("move player",onMovePlayer);
+};
+function onSocketConnected() {
+	console.log("Polaczylem sie i wysylam dane innym"); 
+	// wyslanie swoich wspolrzednych poczatkowych do innych graczy
+	socket.emit("new player", {x: lokalnyGracz.getX(), y: lokalnyGracz.getY()});
+};
+function onNewPlayer(data){
+	console.log('dolaczył gracz: ' + data.id );
+	var newPlayer = new Lokalny(data.x, data.y);
+	newPlayer.id = data.id;
+	pozostaliGracze.push(newPlayer);
+}; 
+function onMovePlayer(data){
+	var movePlayer = playerById(data.id);
+
+	// Player not found
+	if (!movePlayer) {
+		console.log("Player not found: "+data.id);
+		return;
+	};
+
+	// Update player position
+	movePlayer.setX(data.x);
+	movePlayer.setY(data.y);
+};
+function onRemovePlayer(data){
+	var removePlayer = playerById(data.id);
+
+	// Player not found
+	if (!removePlayer) {
+		console.log("Player not found: "+data.id);
+		return;
+	};
+
+	// Remove player from array
+	pozostaliGracze.splice(pozostaliGracze.indexOf(removePlayer), 1);
+}
+
+var requestAnimFrame =  window.requestAnimationFrame ||
+						window.webkitRequestAnimationFrame ||
+						window.mozRequestAnimationFrame ||
+						window.msRequestAnimationFrame ||
+						window.oRequestAnimationFrame;
+
+function rysuj(){ 
+	ctx.fillStyle="#BADA55";
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	
+	lokalnyGracz.draw(ctx);
+	var i;
+	for (i = 0; i < pozostaliGracze.length; i++) {
+		pozostaliGracze[i].draw(ctx);
+	};
+	//setTimeout(function(){ rysuj()}, 10);
+	if(kierunek == lewo) this.lokalnyGracz.setX((this.lokalnyGracz.
+		getX()-vel));
+	if(kierunek == prawo)  this.lokalnyGracz.setX((this.lokalnyGracz.
+		getX()+vel));
+	if(kierunek == dol)  this.lokalnyGracz.setY((this.lokalnyGracz.
+		getY()+vel));
+	if(kierunek == gora) this.lokalnyGracz.setY((this.lokalnyGracz.
+		getY()-vel));
+	
+};
+function loop(){
+update();
+rysuj();
+requestAnimFrame(loop);
+};
+
+//przypisujemy kody klawiszy odpowiedzialnych za ruch
+var lewo    = 37,//strzałka w lewo
+	gora    = 38,//strzałka do góry
+	prawo   = 39,//strzałka w prawo
+	dol     = 40;//strzałka w dół
+//kiedy wciskamy klawisz to poruszaj kwadratem
+document.onkeydown = function(ev)
+{
+	
+	switch(ev.keyCode)
+	{
+		case lewo:
+		case gora:
+		case prawo:
+		case dol:
+			kierunek = ev.keyCode;
+			break;
+ 
+		default:
+			kierunek = null;
+			break;
+	}  
+	if (kierunek) return false;
+}
+//kiedy puszczamy klawisz to przestań poruszać się
+document.onkeyup = function(ev) {
+	kierunek = null;
+};
+function playerById(id) {
+	var i;
+	for (i = 0; i < pozostaliGracze.length; i++) {
+		if (pozostaliGracze[i].id == id)
+			return pozostaliGracze[i];
+	};
+	
+	return false;
+};
+function update() {   
+	socket.emit("move player", {x: lokalnyGracz.getX(),
+	y: lokalnyGracz.getY()});	 
+};
+init(); 
+</script>
+ 
+
+
+
+	</body>
+</html>
